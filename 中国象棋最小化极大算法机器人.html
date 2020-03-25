@@ -275,6 +275,8 @@
 
 	// 获取下一步的棋局数组
 	function nextBoards(boardInfo) {
+		var startTime = new Date().getTime();
+		// console.log('nextBoards start', startTime);
 		var grid =  boardInfo.grid;
 		var nextBoardsArray = [];
 		var nextOwnerColor = (boardInfo.ownerColor === '黑') ? '红' : '黑';
@@ -302,6 +304,7 @@
 				}
 			}
 		}
+		// console.log('nextBoards end', new Date().getTime() - startTime);
 		return nextBoardsArray;
 	}
 

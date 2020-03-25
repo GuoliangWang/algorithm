@@ -183,6 +183,7 @@
 	var mode = '棋局树'; // '人对AI' 'AI对AI'
 	var selectedChessInfo = null;
 	var targetChessInfo = null;
+	var createBoardTreeCount = 0;
 	// 下一步
 	function tryToMoveChess() {
 		var isJiangAlive = isChessAlive('黑_将');
@@ -212,7 +213,13 @@
 			return;
 		}
 		var boardInfo = initialBoardInfo();
+		var startTime = new Date().getTime();
+		createBoardTreeCount = 0;
+		console.log('before createBoardTree', startTime);
 		createBoardTree(boardInfo);
+		var endTime = new Date().getTime();
+		console.log('end createBoardTree', endTime, endTime - startTime);
+		console.log('createBoardTreeCount', createBoardTreeCount);
 		markBestPath(boardInfo);
 		console.log('boardInfo', boardInfo);
 		if (boardInfo.scoreFromBoard) {
@@ -234,6 +241,7 @@
 	// 创建棋局树
 	function createBoardTree(boardInfo) {
 		// console.log('step', boardInfo.step);
+		createBoardTreeCount ++;
 		var maxStep = 3;
 		if (boardInfo.step === maxStep) {
 			boardInfo.nextBoards = [];
@@ -430,10 +438,22 @@
 		}
 		if (chess.indexOf('帅') !== -1 || chess.indexOf('将') !== -1) {
 			var limitInfo = isHeiFang ? chessRowColumnLimit['黑_士&将'] : chessRowColumnLimit['红_士&帅'];
+			var enemyLimitInfo = isHeiFang ? chessRowColumnLimit['红_士&帅'] : chessRowColumnLimit['黑_士&将'];
 			var rowStart = limitInfo.row_start;
 			var rowEnd = limitInfo.row_end;
 			var columnStart = limitInfo.column_start;
 			var columnEnd = limitInfo.column_end;
+			var enemyLeadrChessRow;
+			var enemyLeadrChessColumn;
+			for (var i = enemyLimitInfo.row_start; i < enemyLimitInfo.row_end; i++) {
+				for (var j = enemyLimitInfo.column_start; j < enemyLimitInfo.column_end; j++) {
+					if(grid[i][j].indexOf('帅') !== -1 || grid[i][j].indexOf('将') !== -1) {
+						enemyLeadrChessRow = i;
+						enemyLeadrChessColumn = j;
+						break;
+					}
+				}
+			}
 			for (var i = Math.max(rowNum - 1, rowStart); i <= rowNum + 1 && i <= rowEnd; i++) {
 				for (var j = Math.max(columnNum - 1, columnStart); j <= columnNum + 1 && j <= columnEnd; j++) {
 					var rowLength = Math.abs(i - rowNum);
@@ -444,10 +464,23 @@
 					if(grid[i][j].indexOf(testChessColorStr) !== -1) { // 目标位置有相同棋色棋子，不能移动
 						continue;
 					}
-					targets.push({
-						rowNum: i,
-						columnNum: j
-					})
+					var faceToEnemyLeader = false;
+					if(j === enemyLeadrChessColumn) {
+						var startRow = Math.min(i, enemyLeadrChessRow);
+						var endRow = Math.max(i, enemyLeadrChessRow);
+						for (var k = startRow + 1; k < endRow; k++) {
+							if(grid[k][enemyLeadrChessColumn] !== '') {
+								faceToEnemyLeader = true;
+								break;
+							}
+						}
+					}
+					if(!faceToEnemyLeader) {
+						targets.push({
+							rowNum: i,
+							columnNum: j
+						});
+					}
 				}
 			}
 		}

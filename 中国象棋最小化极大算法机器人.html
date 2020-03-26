@@ -52,6 +52,7 @@
 			width: 11vw;
 			max-width: 60px;
 			height: 11vw;
+			max-height: 60px;
 			display: flex;
 			justify-content: center;
 			align-items: center;
@@ -186,6 +187,7 @@
 	var selectedChessInfo = null;
 	var targetChessInfo = null;
 	var createBoardTreeCount = 0;
+	var boardTree; 
 	// 下一步
 	function tryToMoveChess() {
 		var isJiangAlive = isChessAlive('黑_将');
@@ -205,16 +207,39 @@
 			if(selectedChessInfo && targetChessInfo) {
 				grid[targetChessInfo.rowNum][targetChessInfo.columnNum] = grid[selectedChessInfo.rowNum][selectedChessInfo.columnNum];
 				grid[selectedChessInfo.rowNum][selectedChessInfo.columnNum] = '';
+				console.log('grid', grid);
 				drawGrid(grid);
-				selectedChessInfo = null;
-				targetChessInfo = null;
 				currentTurnChessColor = (currentTurnChessColor === '黑') ? '红' : '黑';
 				renderCurrentChessColor();
+				if(boardTree) {
+					console.log('boardTree gird', boardTree.grid)
+					boardTree = boardTree.nextBoards && boardTree.nextBoards.find(item => {  // 在之前推演的棋局中找到人类选择的棋局
+						return ( item.selectedChessInfo.rowNum === selectedChessInfo.rowNum 
+							&& item.selectedChessInfo.columnNum === selectedChessInfo.columnNum
+							&& item.targetChessInfo.rowNum === targetChessInfo.rowNum
+							&& item.targetChessInfo.columnNum === targetChessInfo.columnNum );
+					});
+				}
+				if(boardTree) {
+					for (var i = 0; i < grid.length; i++) {
+						for (var j = 0; j < grid[i].length; j++) {
+							if(grid[i][j] !== boardTree.grid[i][j]) {
+								console.log('next board tree', boardTree.grid);
+								debugger;
+							}	
+						}
+					}
+				}
+				selectedChessInfo = null;
+				targetChessInfo = null;
 				tryToMoveChess();
 			}
 			return;
 		}
 		var boardInfo = initialBoardInfo();
+		if(boardTree) {
+			boardInfo.nextBoards = boardTree.nextBoards;
+		}
 		var startTime = new Date().getTime();
 		createBoardTreeCount = 0;
 		console.log('before createBoardTree', startTime);
@@ -226,6 +251,7 @@
 		console.log('boardInfo', boardInfo);
 		if (boardInfo.scoreFromBoard) {
 			grid = boardInfo.scoreFromBoard.grid;
+			boardTree = boardInfo.scoreFromBoard;
 		} 
 		if (mode === '棋局树') {
 			drawBoardTree(boardInfo);
@@ -250,11 +276,11 @@
 		createBoardTreeCount ++;
 		var maxStep = 3;
 		if (boardInfo.step === maxStep) {
-			boardInfo.nextBoards = [];
+			boardInfo.nextBoards = undefined;
 		} else {
 			boardInfo.nextBoards = nextBoards(boardInfo);
 		}
-		if(boardInfo.nextBoards.length === 0) {
+		if(!boardInfo.nextBoards || boardInfo.nextBoards.length === 0) {
 			boardInfo.score = evaluateBoard(boardInfo);
 			return;
 		} 
@@ -286,6 +312,16 @@
 		var grid =  boardInfo.grid;
 		var nextBoardsArray = [];
 		var nextOwnerColor = (boardInfo.ownerColor === '黑') ? '红' : '黑';
+		if (boardInfo.nextBoards) { // 之前已经计算的棋局，只需改变一些和步数有关系的数据
+			for (var i = 0; i < boardInfo.nextBoards.length; i++) {
+				boardInfo.nextBoards[i].step = boardInfo.step + 1;
+				boardInfo.nextBoards[i].ownerColor = nextOwnerColor;
+				var indexPath = boardInfo.indexPath.slice();
+				indexPath.push(i);
+				boardInfo.nextBoards[i].indexPath = indexPath;
+			}
+			return boardInfo.nextBoards;
+		}
 		for (var i = 0; i < grid.length; i++) {
 			for (var j = 0; j < grid[i].length; j++) {
 				var chess = grid[i][j];
@@ -328,10 +364,12 @@
 				if(grid[rowNum][i].indexOf(testChessColorStr) !== -1) { // 目标位置有相同棋色棋子，不能继续往左移动
 					break;
 				}
-				targets.push({
-					rowNum: rowNum,
-					columnNum: i
-				});
+				if(!isLeaderFaceToFace(rowNum, columnNum, rowNum, i, grid)) {
+					targets.push({
+						rowNum: rowNum,
+						columnNum: i
+					});
+				}
 				if(grid[rowNum][i] !== '') { // 对方的棋子子挡住去路
 					break;
 				}
@@ -341,10 +379,12 @@
 				if(grid[rowNum][i].indexOf(testChessColorStr) !== -1) { // 目标位置有相同棋色棋子，不能继续往右移动
 					break;
 				}
-				targets.push({
-					rowNum: rowNum,
-					columnNum: i
-				});
+				if(!isLeaderFaceToFace(rowNum, columnNum, rowNum, i, grid)) {
+					targets.push({
+						rowNum: rowNum,
+						columnNum: i
+					});		
+				}
 				if(grid[rowNum][i] !== '') { // 对方的棋子子挡住去路
 					break;
 				}
@@ -354,10 +394,12 @@
 				if(grid[i][columnNum].indexOf(testChessColorStr) !== -1) { // 目标位置有相同棋色棋子，不能继续往上移动
 					break;
 				}
-				targets.push({
-					rowNum: i,
-					columnNum: columnNum
-				});
+				if(!isLeaderFaceToFace(rowNum, columnNum, i, columnNum, grid)) {
+					targets.push({
+						rowNum: i,
+						columnNum: columnNum
+					});
+				}
 				if(grid[i][columnNum] !== '') { // 对方的棋子子挡住去路
 					break;
 				}
@@ -367,10 +409,12 @@
 				if(grid[i][columnNum].indexOf(testChessColorStr) !== -1) { // 目标位置有相同棋色棋子，不能继续往下移动
 					break;
 				}
-				targets.push({
-					rowNum: i,
-					columnNum: columnNum
-				});
+				if(!isLeaderFaceToFace(rowNum, columnNum, i, columnNum, grid)) {
+					targets.push({
+						rowNum: i,
+						columnNum: columnNum
+					});
+				}
 				if(grid[i][columnNum] !== '') { // 对方的棋子子挡住去路
 					break;
 				}
@@ -393,10 +437,12 @@
 					if(grid[i][j].indexOf(testChessColorStr) !== -1) { // 目标位置有相同棋色棋子，不能移动
 						continue;
 					}
-					targets.push({
-						rowNum: i,
-						columnNum: j
-					})
+					if(!isLeaderFaceToFace(rowNum, columnNum, i, j, grid)) {
+						targets.push({
+							rowNum: i,
+							columnNum: j
+						});
+					}
 				}
 			}
 		}
@@ -417,10 +463,12 @@
 					if(grid[i][j].indexOf(testChessColorStr) !== -1) { // 目标位置有相同棋色棋子，不能移动
 						continue;
 					}
-					targets.push({
-						rowNum: i,
-						columnNum: j
-					})
+					if(!isLeaderFaceToFace(rowNum, columnNum, i, j, grid)) {
+						targets.push({
+							rowNum: i,
+							columnNum: j
+						})
+					}
 				}
 			}
 		}
@@ -440,10 +488,12 @@
 					if(grid[i][j].indexOf(testChessColorStr) !== -1) { // 目标位置有相同棋色棋子，不能移动
 						continue;
 					}
-					targets.push({
-						rowNum: i,
-						columnNum: j
-					})
+					if(!isLeaderFaceToFace(rowNum, columnNum, i, j, grid)) {
+						targets.push({
+							rowNum: i,
+							columnNum: j
+						})
+					}
 				}
 			}
 		}
@@ -454,17 +504,17 @@
 			var rowEnd = limitInfo.row_end;
 			var columnStart = limitInfo.column_start;
 			var columnEnd = limitInfo.column_end;
-			var enemyLeadrChessRow;
-			var enemyLeadrChessColumn;
-			for (var i = enemyLimitInfo.row_start; i < enemyLimitInfo.row_end; i++) {
-				for (var j = enemyLimitInfo.column_start; j < enemyLimitInfo.column_end; j++) {
-					if(grid[i][j].indexOf('帅') !== -1 || grid[i][j].indexOf('将') !== -1) {
-						enemyLeadrChessRow = i;
-						enemyLeadrChessColumn = j;
-						break;
-					}
-				}
-			}
+			// var enemyLeadrChessRow;
+			// var enemyLeadrChessColumn;
+			// for (var i = enemyLimitInfo.row_start; i < enemyLimitInfo.row_end; i++) {
+			// 	for (var j = enemyLimitInfo.column_start; j < enemyLimitInfo.column_end; j++) {
+			// 		if(grid[i][j].indexOf('帅') !== -1 || grid[i][j].indexOf('将') !== -1) {
+			// 			enemyLeadrChessRow = i;
+			// 			enemyLeadrChessColumn = j;
+			// 			break;
+			// 		}
+			// 	}
+			// }
 			for (var i = Math.max(rowNum - 1, rowStart); i <= rowNum + 1 && i <= rowEnd; i++) {
 				for (var j = Math.max(columnNum - 1, columnStart); j <= columnNum + 1 && j <= columnEnd; j++) {
 					var rowLength = Math.abs(i - rowNum);
@@ -475,18 +525,19 @@
 					if(grid[i][j].indexOf(testChessColorStr) !== -1) { // 目标位置有相同棋色棋子，不能移动
 						continue;
 					}
-					var faceToEnemyLeader = false;
-					if(j === enemyLeadrChessColumn) {
-						var startRow = Math.min(i, enemyLeadrChessRow);
-						var endRow = Math.max(i, enemyLeadrChessRow);
-						for (var k = startRow + 1; k < endRow; k++) {
-							if(grid[k][enemyLeadrChessColumn] !== '') {
-								faceToEnemyLeader = true;
-								break;
-							}
-						}
-					}
-					if(!faceToEnemyLeader) {
+					// var faceToEnemyLeader = false;
+					// if(j === enemyLeadrChessColumn) {
+					// 	faceToEnemyLeader = true;
+					// 	var startRow = Math.min(i, enemyLeadrChessRow);
+					// 	var endRow = Math.max(i, enemyLeadrChessRow);
+					// 	for (var k = startRow + 1; k < endRow; k++) {
+					// 		if(grid[k][enemyLeadrChessColumn] !== '') {
+					// 			faceToEnemyLeader = false;
+					// 			break;
+					// 		}
+					// 	}
+					// }
+					if(!isLeaderFaceToFace(rowNum, columnNum, i, j, grid)) {
 						targets.push({
 							rowNum: i,
 							columnNum: j
@@ -502,10 +553,12 @@
 				if(hasGunMoun) {
 				 	if(grid[rowNum][i] !== '') {
 					 	if(grid[rowNum][i].indexOf(testChessColorStr) === -1) {
-							targets.push({
-								rowNum: rowNum,
-								columnNum: i
-							}); 		
+					 		if(!isLeaderFaceToFace(rowNum, columnNum, rowNum, i, grid)) {
+								targets.push({
+									rowNum: rowNum,
+									columnNum: i
+								}); 		
+							}
 						}
 						break;
 					}
@@ -514,10 +567,12 @@
 						hasGunMoun = true;
 						continue;
 					}
-					targets.push({
-						rowNum: rowNum,
-						columnNum: i
-					});
+					if(!isLeaderFaceToFace(rowNum, columnNum, rowNum, i, grid)) {
+						targets.push({
+							rowNum: rowNum,
+							columnNum: i
+						});
+					}
 				}
 			}
 			// 查找炮所在行上,右侧的可移动位置
@@ -526,10 +581,12 @@
 				if(hasGunMoun) {
 					if(grid[rowNum][i] !== '') {
 					 	if(grid[rowNum][i].indexOf(testChessColorStr) === -1) {
-							targets.push({
-								rowNum: rowNum,
-								columnNum: i
-							}); 		
+					 		if(!isLeaderFaceToFace(rowNum, columnNum, rowNum, i, grid)) {
+								targets.push({
+									rowNum: rowNum,
+									columnNum: i
+								}); 		
+							}
 						}
 						break;
 					}
@@ -538,10 +595,12 @@
 						hasGunMoun = true;
 						continue;
 					}
-					targets.push({
-						rowNum: rowNum,
-						columnNum: i
-					});
+					if(!isLeaderFaceToFace(rowNum, columnNum, rowNum, i, grid)) {
+						targets.push({
+							rowNum: rowNum,
+							columnNum: i
+						});
+					}
 				}
 			}
 			// 查找车所在列上, 上侧的可移动位置
@@ -550,10 +609,12 @@
 				if(hasGunMoun) {
 					if(grid[i][columnNum] !== '') {
 					 	if(grid[i][columnNum].indexOf(testChessColorStr) === -1) {
-							targets.push({
-								rowNum: i,
-								columnNum: columnNum
-							}); 		
+					 		if(!isLeaderFaceToFace(rowNum, columnNum, i, columnNum, grid)) {
+								targets.push({
+									rowNum: i,
+									columnNum: columnNum
+								}); 		
+							}
 						}
 						break;
 					}
@@ -562,10 +623,12 @@
 						hasGunMoun = true;
 						continue;
 					}
-					targets.push({
-						rowNum: i,
-						columnNum: columnNum
-					});
+					if(!isLeaderFaceToFace(rowNum, columnNum, i, columnNum, grid)) {
+						targets.push({
+							rowNum: i,
+							columnNum: columnNum
+						});
+					}
 				}
 			}
 			// 查找车所在列上, 下侧的可移动位置
@@ -574,10 +637,12 @@
 				if(hasGunMoun) {
 					if(grid[i][columnNum] !== '') {
 					 	if(grid[i][columnNum].indexOf(testChessColorStr) === -1) {
-							targets.push({
-								rowNum: i,
-								columnNum: columnNum
-							}); 		
+					 		if(!isLeaderFaceToFace(rowNum, columnNum, i, columnNum, grid)) {
+								targets.push({
+									rowNum: i,
+									columnNum: columnNum
+								}); 		
+							}
 						}
 						break;
 					}
@@ -586,10 +651,12 @@
 						hasGunMoun = true;
 						continue;
 					}
-					targets.push({
-						rowNum: i,
-						columnNum: columnNum
-					});
+					if(!isLeaderFaceToFace(rowNum, columnNum, i, columnNum, grid)) {
+						targets.push({
+							rowNum: i,
+							columnNum: columnNum
+						});
+					}
 				}
 			}
 		}
@@ -607,10 +674,12 @@
 					if (rowNum < 5 && columnLength !== 0) { // 未过河，不能横着走
 						continue;
 					}
-					targets.push({
-						rowNum: i,
-						columnNum: j
-					})
+					if(!isLeaderFaceToFace(rowNum, columnNum, i, j, grid)) {
+						targets.push({
+							rowNum: i,
+							columnNum: j
+						})
+					}
 				}
 			}
 		}
@@ -628,16 +697,15 @@
 					if (rowNum >= 5 && columnLength !== 0) { // 未过河，不能横着走
 						continue;
 					}
-					targets.push({
-						rowNum: i,
-						columnNum: j
-					})
+					if(!isLeaderFaceToFace(rowNum, columnNum, i, j, grid)) {
+						targets.push({
+							rowNum: i,
+							columnNum: j
+						})
+					}
 				}
 			}
 		}
-
-		//  todo 查找其他类型棋子的目标
-
 		return targets;
 	}
 	// 
@@ -714,24 +782,22 @@
 	function drawBoardTree(boardTree) {
 		var boardElemetInfos = [];
 		var maxStep = 0;
-		var elementId = 0;
-		function createElements(boardInfo, fromElementId, prevBoardInfo) {
+		function createElements(boardInfo, prevBoardInfo) {
 			var scoreFromBoard =  prevBoardInfo && prevBoardInfo.scoreFromBoard;
 			var isScoreFromBoard = (scoreFromBoard === boardInfo);
-			var newElementId = elementId;
 			boardElemetInfos.push({
 				boardInfo: boardInfo,
 				elementId: newElementId,
-				fromElementId: fromElementId,
-				element: createElement(boardInfo, isScoreFromBoard, newElementId)
+				element: createElement(boardInfo, isScoreFromBoard)
 			});
-			elementId ++;
-			for (var i = 0; i < boardInfo.nextBoards.length; i++) {
-				createElements(boardInfo.nextBoards[i], newElementId, boardInfo);
+			if(boardInfo.nextBoards) {
+				for (var i = 0; i < boardInfo.nextBoards.length; i++) {
+					createElements(boardInfo.nextBoards[i], boardInfo);
+				}
 			}
 			maxStep = Math.max(boardInfo.step, maxStep);
 		}
-		function createElement(boardInfo, isScoreFromBoard, elementId) {
+		function createElement(boardInfo, isScoreFromBoard) {
 			var ele = document.createElement('div');
 			ele.innerText = boardInfo.score;
 			ele.classList.add('board-node');
@@ -741,7 +807,6 @@
 			if(boardInfo.inBestPath) {
 				ele.classList.add("board-node_in-best-path");	
 			}
-			ele.id = 'borad-' + elementId;
 			ele.onclick = function() {
 				var selectedBoardGrid = document.getElementById('selected-board-grid');
 				if(selectedBoardGrid.boardEle) {
@@ -973,6 +1038,8 @@
 					}
 					targetChessInfo = {rowNum: this.rowNum, columnNum: this.columnNum};
 					this.classList.add('chess-text_targeted');
+					console.log('selectedChessInfo', selectedChessInfo);
+					console.log('targetChessInfo', targetChessInfo);
 					tryToMoveChess();
 				}
 			}
@@ -996,6 +1063,42 @@
 			grid = copyGrid(initialGrid);
 			drawGrid(grid);
 		}
+	}
+	function isLeaderFaceToFace(fromRow, fromColum, toRow, toColumn, grid) {
+		var jiangLimitInfo = chessRowColumnLimit['黑_士&将'];
+		var shuaiLimitInfo = chessRowColumnLimit['红_士&帅'];
+		var columnStart = Math.min(jiangLimitInfo.column_start, fromColum);
+		var columnEnd = Math.max(jiangLimitInfo.column_start, fromColum);
+		for (j = jiangLimitInfo.column_start; j <= jiangLimitInfo.column_end; j++) {
+			var chess;
+			var leaderRows = [];
+			var normalChessRows = [];
+			for (var i = 0; i < grid.length; i++) {
+				if (i === fromRow && j === fromColum) {
+					chess = '';
+				} else if (i === toRow && j === toColumn) {
+					chess = grid[fromRow][fromColum];
+				} else {
+					chess = grid[i][j];
+				}
+				if (chess === '黑_将' || chess === '红_帅') {
+					leaderRows.push(i);
+				} else if(chess !== '') {
+					normalChessRows.push(i);
+				}
+			}
+			if (leaderRows.length === 1) { // 一列只有一个将或者帅，不会对脸
+				return false;
+			}
+			if(leaderRows.length === 2) {
+				var leaderRowMin = Math.min(...leaderRows);
+				var leaderRowMax = Math.max(...leaderRows);
+				return !normalChessRows.some(item => { // 中间有一个棋子就不会对脸
+					return item > leaderRowMin && item < leaderRowMax;
+				});
+			}
+		}
+		return false;
 	}
 	getStorage();
 	renderCurrentChessColor();
